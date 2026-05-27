@@ -276,50 +276,51 @@ tr:hover td{background:rgba(0,212,255,.03)} tr:last-child td{border-bottom:none}
 /* ═══════════════════════════════════════════════════════════
    ★★★ 雲端 JSON 自動同步設定區 ★★★
 ═══════════════════════════════════════════════════════════ */
-// ⚠️ 請將下方的網址，替換成你放在 GitHub 上的 13F_snapshot.json 的「Raw」網址
-// 例如: 'https://raw.githubusercontent.com/你的帳號/你的Repo/main/13F_snapshot.json'
-const JSON_SNAPSHOT_URL = 'https://raw.githubusercontent.com/username/repo/main/13F_snapshot.json';
+// 🚨 重要：請將網址改成您的 Raw GitHub 網址
+const JSON_SNAPSHOT_URL = 'https://raw.githubusercontent.com/你的帳號/你的儲存庫/main/13F_snapshot.json';
+const FALLBACK_HOLDINGS = [{rank:1,ticker:'MSFT',company:'MICROSOFT CORP',holding_pct:5.61,inst_count:30}];
 
-// 安全備援名單（如果雲端網址掛掉、或是你還沒上傳 JSON，系統會自動使用這份名單）
-const FALLBACK_HOLDINGS = [
-  {rank:1,ticker:'MSFT',company:'MICROSOFT CORP',holding_pct:5.61,inst_count:30},
-  {rank:2,ticker:'NVDA',company:'NVIDIA CORPORATION',holding_pct:5.15,inst_count:36},
-  {rank:3,ticker:'AAPL',company:'APPLE INC',holding_pct:5.03,inst_count:32},
-  {rank:4,ticker:'AMZN',company:'AMAZON COM INC',holding_pct:2.84,inst_count:22},
-  {rank:5,ticker:'GOOGL',company:'ALPHABET INC',holding_pct:3.21,inst_count:45},
-  {rank:6,ticker:'META',company:'META PLATFORMS INC',holding_pct:1.84,inst_count:30},
-  {rank:7,ticker:'TSLA',company:'TESLA INC',holding_pct:0.85,inst_count:22},
-  {rank:8,ticker:'LLY',company:'ELI LILLY & CO',holding_pct:1.35,inst_count:30},
-  {rank:9,ticker:'AVGO',company:'BROADCOM INC',holding_pct:1.24,inst_count:22},
-  {rank:10,ticker:'BRK-B',company:'BERKSHIRE HATHAWAY INC',holding_pct:1.00,inst_count:28}
-];
+let results = []; // 全域變數存放分析結果
 
-// 負責抓取雲端 JSON 的函數
-async function loadSmartMoneySnapshot(onProgress){
-  onProgress({msg:'📥 第一賽道：正在從雲端抓取最新的 13F 持股快照...'});
-  try {
-    // 透過 fetch 向你設定的網址發送請求
-    const response = await fetch(JSON_SNAPSHOT_URL, { cache: "no-store" }); 
-    if (!response.ok) throw new Error('伺服器回應錯誤');
-    const data = await response.json(); // 解析 JSON
-    
-    // 檢查資料格式是否正確
-    if(!Array.isArray(data) || data.length === 0){
-        throw new Error('JSON 格式錯誤或為空');
+// 封裝核心函數到 window，解決 ReferenceError
+window.loadSmartMoneySnapshot = async function(onProgress){
+    onProgress({msg:'📥 讀取雲端大戶名單...'});
+    try {
+        const response = await fetch(JSON_SNAPSHOT_URL, { cache: "no-cache" });
+        if (!response.ok) throw new Error();
+        return await response.json();
+    } catch (e) {
+        return FALLBACK_HOLDINGS;
     }
-    
-    onProgress({msg:'✅ 第一賽道完成！成功從雲端同步大戶名單。'});
-    await sleep(400);
+};
+
+window.loadAI = async function(ticker){
+    const r = results.find(x => x.ticker === ticker);
+    if (!r) return;
+    const btn = document.getElementById('ai-btn');
+    const box = document.getElementById('ai-box');
+    btn.disabled = true; btn.textContent = 'AI 思考中...';
+    box.textContent = await fetchAIInsight(r);
+    btn.disabled = false; btn.textContent = '重新生成';
+};
+
+
+// 2. 修正 loadSmartMoneySnapshot 函數
+async function loadSmartMoneySnapshot(onProgress){
+  onProgress({msg:'📥 正在抓取雲端大戶持股清單...'});
+  try {
+    const response = await fetch(JSON_SNAPSHOT_URL, { cache: "no-cache" });
+    if (!response.ok) throw new Error('雲端檔案讀取失敗，請檢查 GitHub Raw 網址是否正確');
+    const data = await response.json();
+    onProgress({msg:'✅ 成功載入 30 檔大戶持股！'});
     return data;
-    
   } catch (error) {
-    console.warn("雲端 JSON 載入失敗，將使用內建備援名單:", error);
-    onProgress({msg:'⚠️ 雲端連線失敗，自動切換至安全備援名單...'});
-    await sleep(800);
+    console.error("雲端載入錯誤:", error);
+    toast('⚠️ 雲端名單讀取失敗，使用內建備援名單');
     return FALLBACK_HOLDINGS;
   }
 }
-
+</script>     
 /* ═══════════════════════════════════════════════════════════
    以下為系統核心邏輯 (不用動)
 ═══════════════════════════════════════════════════════════ */
@@ -430,17 +431,44 @@ async function analyzeStock(h){
   base.success=true; return base;
 }
 
+/* ═══════════════════════════════════════════════════════════
+   DeepSeek AI INSIGHT  (相容 OpenAI 格式)
+═══════════════════════════════════════════════════════════ */
 async function fetchAIInsight(r){
-  const ak=getApiKey(); if(!ak) return '請在上方輸入 Anthropic API Key，即可讓 AI 幫你寫出專屬的操作建議喔！';
-  const prompt=`你是專屬於散戶的親切 AI 投資副手。請用「繁體中文、完全白話文、零專有名詞」，在 100 字內，針對以下股票提供操作建議：
+  const ak = getApiKey(); // 確保使用者輸入的是 sk- 開頭的 Key
+  if(!ak) return '請在上方輸入 DeepSeek API Key 以啟用 AI 洞察。';
+  
+  const prompt = `你是專屬於散戶的親切 AI 投資副手。請用「繁體中文、完全白話文、零專有名詞」，在 100 字內，針對以下股票提供操作建議：
 代碼:${r.ticker} 現價:$${r.price} 系統建議:${r.action_zh}
 大戶動向與技術面亮點:${Object.values(r.ict_signals).join(' ')}
-預篩通過:${r.prescreen?.passCount}/3 | 量比:${r.vol_ratio}x | 停損安全參考價:$${r.stop_loss}
-請像專業又親切的朋友一樣給予：①現在能不能買 ②風險在哪裡 ③一個明確的行動指引。語氣要鼓勵且提醒安全第一。`;
+預篩通過:${r.prescreen?.passCount}/3 | 量比:${r.vol_ratio}x | 停損參考:$${r.stop_loss}
+請給予：①現在能不能買 ②風險在哪裡 ③明確的行動指引。語氣親切且安全第一。`;
+  
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{ method:'POST', headers:{'Content-Type':'application/json', 'x-api-key': ak, 'anthropic-version': '2023-06-01', 'anthropic-dangerously-allow-browser': 'true'}, body:JSON.stringify({ model:'claude-3-haiku-20240307', max_tokens:200, messages:[{role:'user',content:prompt}] }) });
-    if(!res.ok) throw new Error('Key 可能無效或沒開通'); const d=await res.json(); return d.content?.[0]?.text||'AI分析失敗。';
-  }catch(e){ return 'API連線失敗：'+e.message; }
+    const res = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${ak}` // DeepSeek 使用 Bearer Token 驗證
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: [{role: 'user', content: prompt}],
+        temperature: 0.7,
+        max_tokens: 250
+      })
+    });
+    
+    if(!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || 'API 連線異常');
+    }
+    
+    const d = await res.json();
+    return d.choices?.[0]?.message?.content || 'AI 分析未回傳結果。';
+  } catch(e) {
+    return 'API 連線失敗：' + e.message;
+  }
 }
 
 async function runAnalysis(){
@@ -531,6 +559,11 @@ async function runProxyDiag(){
 document.getElementById('btn-run').onclick=runAnalysis;
 if(IS_FILE_PROTO) document.getElementById('file-warning').style.display='block';
 const savedKey=localStorage.getItem('mj_ak'); if(savedKey){ document.getElementById('api-key').value=savedKey; document.getElementById('api-status').textContent='✅ 已載入'; }
-</script>
+// 最後綁定事件
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('btn-run').onclick = runAnalysis;
+        });
+    </script>
 </body>
 </html>
+
