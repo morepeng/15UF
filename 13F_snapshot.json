@@ -1,0 +1,212 @@
+[
+  {
+    "rank": 1,
+    "ticker": "NVDA",
+    "company": "NVIDIA CORPORATION",
+    "holding_pct": 5.73,
+    "inst_count": 125
+  },
+  {
+    "rank": 2,
+    "ticker": "AAPL",
+    "company": "APPLE INC",
+    "holding_pct": 5.15,
+    "inst_count": 132
+  },
+  {
+    "rank": 3,
+    "ticker": "MSFT",
+    "company": "MICROSOFT CORP",
+    "holding_pct": 4.37,
+    "inst_count": 119
+  },
+  {
+    "rank": 4,
+    "ticker": "GOOGL",
+    "company": "ALPHABET INC",
+    "holding_pct": 3.98,
+    "inst_count": 220
+  },
+  {
+    "rank": 5,
+    "ticker": "AMZN",
+    "company": "AMAZON COM INC",
+    "holding_pct": 2.75,
+    "inst_count": 111
+  },
+  {
+    "rank": 6,
+    "ticker": "META",
+    "company": "META PLATFORMS INC",
+    "holding_pct": 1.91,
+    "inst_count": 117
+  },
+  {
+    "rank": 7,
+    "ticker": "AVGO",
+    "company": "BROADCOM INC",
+    "holding_pct": 1.88,
+    "inst_count": 104
+  },
+  {
+    "rank": 8,
+    "ticker": "TSLA",
+    "company": "TESLA INC",
+    "holding_pct": 1.25,
+    "inst_count": 105
+  },
+  {
+    "rank": 9,
+    "ticker": "LLY",
+    "company": "ELI LILLY & CO",
+    "holding_pct": 1.16,
+    "inst_count": 114
+  },
+  {
+    "rank": 10,
+    "ticker": "BRK-B",
+    "company": "BERKSHIRE HATHAWAY INC DEL",
+    "holding_pct": 1.02,
+    "inst_count": 123
+  },
+  {
+    "rank": 11,
+    "ticker": "XOM",
+    "company": "EXXON MOBIL CORP",
+    "holding_pct": 0.88,
+    "inst_count": 102
+  },
+  {
+    "rank": 12,
+    "ticker": "V",
+    "company": "VISA INC",
+    "holding_pct": 0.74,
+    "inst_count": 113
+  },
+  {
+    "rank": 13,
+    "ticker": "JNJ",
+    "company": "JOHNSON & JOHNSON",
+    "holding_pct": 0.73,
+    "inst_count": 101
+  },
+  {
+    "rank": 14,
+    "ticker": "MA",
+    "company": "MASTERCARD INCORPORATED",
+    "holding_pct": 0.66,
+    "inst_count": 116
+  },
+  {
+    "rank": 15,
+    "ticker": "WMT",
+    "company": "WALMART INC",
+    "holding_pct": 0.63,
+    "inst_count": 110
+  },
+  {
+    "rank": 16,
+    "ticker": "JPM",
+    "company": "JPMORGAN CHASE & CO.",
+    "holding_pct": 0.59,
+    "inst_count": 29
+  },
+  {
+    "rank": 17,
+    "ticker": "BAC",
+    "company": "BANK AMERICA CORP",
+    "holding_pct": 0.58,
+    "inst_count": 132
+  },
+  {
+    "rank": 18,
+    "ticker": "ABBV",
+    "company": "ABBVIE INC",
+    "holding_pct": 0.55,
+    "inst_count": 102
+  },
+  {
+    "rank": 19,
+    "ticker": "KO",
+    "company": "COCA COLA CO",
+    "holding_pct": 0.54,
+    "inst_count": 111
+  },
+  {
+    "rank": 20,
+    "ticker": "AXP",
+    "company": "AMERICAN EXPRESS CO",
+    "holding_pct": 0.46,
+    "inst_count": 104
+  },
+  {
+    "rank": 21,
+    "ticker": "UNH",
+    "company": "UNITEDHEALTH GROUP INC",
+    "holding_pct": 0.46,
+    "inst_count": 105
+  },
+  {
+    "rank": 22,
+    "ticker": "HD",
+    "company": "HOME DEPOT INC",
+    "holding_pct": 0.45,
+    "inst_count": 99
+  },
+  {
+    "rank": 23,
+    "ticker": "MU",
+    "company": "MICRON TECHNOLOGY INC",
+    "holding_pct": 0.43,
+    "inst_count": 113
+  },
+  {
+    "rank": 24,
+    "ticker": "AMD",
+    "company": "ADVANCED MICRO DEVICES INC",
+    "holding_pct": 0.43,
+    "inst_count": 123
+  },
+  {
+    "rank": 25,
+    "ticker": "MRK",
+    "company": "MERCK & CO INC",
+    "holding_pct": 0.43,
+    "inst_count": 114
+  },
+  {
+    "rank": 26,
+    "ticker": "JPM",
+    "company": "JPMORGAN CHASE & CO",
+    "holding_pct": 0.4,
+    "inst_count": 62
+  },
+  {
+    "rank": 27,
+    "ticker": "ORCL",
+    "company": "ORACLE CORP",
+    "holding_pct": 0.38,
+    "inst_count": 112
+  },
+  {
+    "rank": 28,
+    "ticker": "CAT",
+    "company": "CATERPILLAR INC",
+    "holding_pct": 0.38,
+    "inst_count": 94
+  },
+  {
+    "rank": 29,
+    "ticker": "PLTR",
+    "company": "PALANTIR TECHNOLOGIES INC",
+    "holding_pct": 0.34,
+    "inst_count": 98
+  },
+  {
+    "rank": 30,
+    "ticker": "LRCX",
+    "company": "LAM RESEARCH CORP",
+    "holding_pct": 0.34,
+    "inst_count": 99
+  }
+]
