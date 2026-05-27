@@ -1,0 +1,68 @@
+# ── Python ───────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ── 虛擬環境 ─────────────────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ── Anaconda / Jupyter ───────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb
+
+# ── 分析輸出 (CSV) ───────────────────────────────────────────
+13F_Output/
+MJ_Sniper_v9/
+*.csv
+!sample_output.csv
+
+# ── IDE ──────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+.spyproject/
+.spyderproject/
+
+# ── OS ───────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ── API Keys / Secrets ───────────────────────────────────────
+.env
+.env.local
+secrets.json
+api_keys.txt
+config_local.py
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+
+# ── Temp ─────────────────────────────────────────────────────
+tmp/
+temp/
+.temp/
+*.tmp
+*.bak
