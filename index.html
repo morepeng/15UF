@@ -296,7 +296,6 @@ tr:last-child td{border-bottom:none}
 </head>
 <body>
 
-<!-- ═══════════════ HEADER ═══════════════ -->
 <header>
   <div class="logo">
     <div class="logo-icon">🎯</div>
@@ -317,14 +316,12 @@ tr:last-child td{border-bottom:none}
   </div>
 </header>
 
-<!-- ═══════════════ LOADING ═══════════════ -->
 <div id="loading">
   <div class="loader-ring"></div>
   <div class="loader-msg" id="loading-msg">INITIALIZING...</div>
   <div id="progress-text"></div>
 </div>
 
-<!-- ═══════════════ FILE:// WARNING ═══════════════ -->
 <div id="file-warning" style="display:none;position:fixed;top:0;left:0;right:0;z-index:400;
   background:linear-gradient(135deg,rgba(255,140,0,.95),rgba(255,51,102,.9));
   padding:16px 20px;font-family:var(--font-ui);">
@@ -376,10 +373,8 @@ tr:last-child td{border-bottom:none}
   </div>
 </div>
 
-<!-- ═══════════════ TOAST ═══════════════ -->
 <div id="toast"></div>
 
-<!-- ═══════════════ DETAIL PANEL ═══════════════ -->
 <div id="detail-panel">
   <div class="panel-header">
     <div>
@@ -391,10 +386,8 @@ tr:last-child td{border-bottom:none}
   <div class="panel-body" id="panel-body"></div>
 </div>
 
-<!-- ═══════════════ MAIN ═══════════════ -->
 <div class="container">
 
-  <!-- Status Stats -->
   <div class="status-bar" id="stats-bar">
     <div class="stat-card"><div class="stat-label">持股分析</div><div class="stat-value cyan" id="s-total">─</div></div>
     <div class="stat-card"><div class="stat-label">買進目標</div><div class="stat-value green" id="s-buy">─</div></div>
@@ -403,7 +396,6 @@ tr:last-child td{border-bottom:none}
     <div class="stat-card"><div class="stat-label">Kill Zone</div><div class="stat-value purple" id="s-kz">─</div></div>
   </div>
 
-  <!-- API Key -->
   <div class="api-bar">
     <label>🤖 Anthropic API Key (選填 · 啟用AI個股洞察)</label>
     <input type="password" id="api-key" placeholder="sk-ant-api...">
@@ -412,7 +404,6 @@ tr:last-child td{border-bottom:none}
     <span id="api-status" style="font-size:11px;color:var(--muted)"></span>
   </div>
 
-  <!-- Step 1: 13F Holdings -->
   <div class="section">
     <div class="section-title">
       STEP 1 · 13F 機構持股 <span>TOP 30 · SEC EDGAR 聚合</span>
@@ -420,7 +411,6 @@ tr:last-child td{border-bottom:none}
     <div id="holdings-list" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div>
   </div>
 
-  <!-- Step 2-5: Analysis -->
   <div class="section">
     <div class="section-title">
       STEP 2–5 · 預篩 + TA + ICT/SMC 複合評分
@@ -467,15 +457,12 @@ tr:last-child td{border-bottom:none}
       </table>
     </div>
   </div>
-  <!-- Proxy 診斷 -->
   <div class="section" id="proxy-section" style="display:none">
     <div class="section-title">🔧 Proxy 連線診斷 <span>點「診斷」找可用的資料來源</span></div>
     <div id="proxy-results" style="display:flex;gap:8px;flex-wrap:wrap"></div>
   </div>
 
-</div><!-- /container -->
-
-<script>
+</div><script>
 /* ═══════════════════════════════════════════════════════════
    CONFIG
 ═══════════════════════════════════════════════════════════ */
@@ -764,6 +751,11 @@ async function fetchHoldings13F(cik, accession){
 // 名稱解析：公司名 → ticker
 function resolveTicker(companyName){
   const name=companyName.toUpperCase().trim();
+
+  // 🚨 新增：直接擋掉 ETF、信託、基金等非個股目標
+  const skipKeywords = [' ETF', ' TRUST', ' FUND', ' TR', ' PORTFOLIO', ' INDEX', ' IDX'];
+  if(skipKeywords.some(kw => name.includes(kw))) return null;
+
   if(NAME_TO_TICKER[name]) return NAME_TO_TICKER[name];
   // 去後綴模糊匹配
   const sfx=[' INC',' CORP',' LTD',' CO',' GROUP',' PLC','-CL A','-CL B',
@@ -833,10 +825,12 @@ async function scrape13FHoldings(onProgress){
     ticker       : resolveTicker(name),
   }));
 
-  // ★ 排序取前30，保底不過濾 ticker=null
+  // ★ 修正：先取前200名，過濾掉沒有 ticker (ETF/基金) 的項目，最後再取前 30
   return rows
     .sort((a,b)=>b.total_value-a.total_value)
-    .slice(0,30)
+    .slice(0, 200)
+    .filter(r => r.ticker !== null)
+    .slice(0, CFG.TOP_N)
     .map((r,i)=>({...r, rank:i+1}));
 }
 
@@ -1570,7 +1564,6 @@ async function openPanel(ticker){
   const ac=r.action==='BUY'?'var(--green)':r.action==='SELL'?'var(--red)':r.action==='WATCH'?'var(--yellow)':'var(--muted)';
 
   document.getElementById('panel-body').innerHTML=`
-    <!-- Score -->
     <div class="panel-section">
       <div class="panel-label">複合評分</div>
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
@@ -1595,12 +1588,10 @@ async function openPanel(ticker){
         </div>
       </div>
     </div>
-    <!-- Chart placeholder -->
     <div class="panel-section">
       <div class="panel-label">近期走勢</div>
       <div class="chart-wrap"><canvas id="detail-chart"></canvas></div>
     </div>
-    <!-- Pre-screen -->
     <div class="panel-section">
       <div class="panel-label">三道預篩</div>
       ${[['流動性',ps.liq,'均量≥50萬股'],['趨勢MA60',ps.trend,'收盤>MA60'],['資金流向',ps.flow,`量比${r.vol_ratio}x`]].map(([name,ok,hint])=>`
@@ -1610,7 +1601,6 @@ async function openPanel(ticker){
         <div class="gauge-value" style="color:${ok?'var(--green)':'var(--red)'}">${ok?'通過':'未通過'}</div>
       </div>`).join('')}
     </div>
-    <!-- TA -->
     <div class="panel-section">
       <div class="panel-label">傳統 TA 信號</div>
       ${Object.entries(r.ta_signals||{}).map(([k,v])=>{
@@ -1630,7 +1620,6 @@ async function openPanel(ticker){
         <span>量比:<b style="color:${r.vol_ratio>=1.5?'var(--cyan)':'var(--text)'}">${r.vol_ratio}x</b></span>
       </div>
     </div>
-    <!-- ICT/SMC -->
     <div class="panel-section">
       <div class="panel-label">ICT/SMC 結構</div>
       <div class="ict-grid">
@@ -1675,7 +1664,6 @@ async function openPanel(ticker){
         </div>
       </div>
     </div>
-    <!-- Price info -->
     <div class="panel-section">
       <div class="panel-label">價格資訊</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px">
@@ -1689,7 +1677,6 @@ async function openPanel(ticker){
         ).join('')}
       </div>
     </div>
-    <!-- AI -->
     <div class="panel-section">
       <div class="panel-label" style="display:flex;align-items:center;justify-content:space-between">
         🤖 AI 洞察
