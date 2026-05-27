@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>MJ 13F SmartPick v2.0 · ICT/SMC Elite</title>
+<title>MJ 13F SmartPick v2.1 · ICT/SMC Elite</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 /* ═══════════════════════════════════════════════════════════
@@ -302,7 +302,7 @@ tr:last-child td{border-bottom:none}
     <div class="logo-icon">🎯</div>
     <div>
       <div class="logo-text">MJ 13F SmartPick</div>
-      <div class="logo-sub">ICT/SMC ELITE v2.0</div>
+      <div class="logo-sub">ICT/SMC ELITE v2.1</div>
     </div>
   </div>
   <div class="header-mid">
@@ -598,8 +598,11 @@ const FALLBACK_HOLDINGS = [
 const SEC_BASE   = 'https://data.sec.gov';
 const EDGAR_BASE = 'https://www.sec.gov';
 const PROXIES    = [
+  url => url,
   url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
   url => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`,
+  url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+  url => `https://thingproxy.freeboard.io/fetch/${url}`,
 ];
 
 async function fetchProxy(url, timeoutMs=12000){
@@ -645,8 +648,10 @@ function parseInfoTableXML(xmlText){
   const holdings=[];
   if(!xmlText||xmlText.length<100) return holdings;
 
-  // 清理 SGML 包裝
-  xmlText=xmlText.replace(/<\/?XML>\s*/gi,'').trim();
+  // ★ 清理 BOM + XML宣告 + SGML 包裝
+  xmlText=xmlText.replace(/\uFEFF/g,'')
+                 .replace(/<\?xml[^>]*>\s*/gi,'')
+                 .replace(/<\/?XML>\s*/gi,'').trim();
 
   // ── 方式A: DOMParser ────────────────────────────────────
   try{
@@ -746,6 +751,13 @@ async function fetchHoldings13F(cik, accession){
       }
     }
   }
+
+  // ★ S5: .txt 完整申報全文（最終保底）
+  const fullTxt=await fetchProxy(`${EDGAR_BASE}/Archives/edgar/data/${cikInt}/${accNd}/${accession}.txt`,15000);
+  if(fullTxt&&fullTxt.length>500){
+    const h=parseInfoTableXML(fullTxt);
+    if(h.length>0) return h;
+  }
   return [];
 }
 
@@ -821,10 +833,9 @@ async function scrape13FHoldings(onProgress){
     ticker       : resolveTicker(name),
   }));
 
-  // 排序取前30，過濾有ticker的
+  // ★ 排序取前30，保底不過濾 ticker=null
   return rows
     .sort((a,b)=>b.total_value-a.total_value)
-    .filter(r=>r.ticker)
     .slice(0,30)
     .map((r,i)=>({...r, rank:i+1}));
 }
@@ -1415,8 +1426,9 @@ async function runAnalysis(){
   document.getElementById('loading-msg').textContent='📈 STEP 2–5: 技術分析 + ICT/SMC...';
   let done=0;
   for(const h of holdingsList){
+    if(!h.ticker){ continue; } // ★ ticker解析失敗跳過
     document.getElementById('loading-msg').textContent=
-      `📈 分析中 ${h.ticker} (${h.company_name||h.company||''})`;
+      `📈 分析中 ${h.ticker} (${h.company_name||h.company||''})` ;
     document.getElementById('progress-text').textContent=
       `${done+1} / ${holdingsList.length}`;
 
