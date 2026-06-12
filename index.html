@@ -952,7 +952,7 @@ function updateClock(){
 setInterval(updateClock, 1000); updateClock();
 
 /* ═══════════════════════════════════════════════════════════
-   DATA FETCHING  v2.3 (專屬 Cloudflare Worker 版)
+   DATA FETCHING  v2.4 (強化版 Proxy 與除錯)
 ═══════════════════════════════════════════════════════════ */
 const IS_FILE_PROTO = location.protocol === 'file:';
 const IS_HTTPS      = location.protocol === 'https:';
@@ -964,12 +964,15 @@ const YF_ENDPOINTS = [
   'https://query1.finance.yahoo.com/v7/finance/chart/',
 ];
 
-// 🟢 您的專屬 Cloudflare Worker Proxy 網址
-const MY_PRIVATE_PROXY = 'https://morepeng.ccwu.cc/?url=';
+// ⚠️ 關鍵修正：請將下面這行換成您真正的 workers.dev 網址！
+// 例如： 'https://mj-proxy.peter.workers.dev/?url='
+// 🟢 直接使用 Cloudflare 原生的 Pages 網域，避開自訂 DNS 路由問題
+const MY_PRIVATE_PROXY = 'https://morepeng.pages.dev/?url=';
 
-// CORS Proxy 清單（優先使用個人專屬 Proxy，保留公共作為極限備援）
+// CORS Proxy 清單（加入極強的 codetabs 作為第一備援）
 const CORS_PROXIES = [
   url => MY_PRIVATE_PROXY + encodeURIComponent(url),
+  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   url => 'https://corsproxy.io/?' + encodeURIComponent(url),
   url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
 ];
@@ -1023,8 +1026,11 @@ async function fetchOHLCV(ticker){
       if(direct){ const rows=parseYFResponse(direct); if(rows&&rows.length>=30) return rows; }
     }
 
-    // 策略②: CORS Proxy 備援（使用專屬 Cloudflare Worker）
+    // 策略②: CORS Proxy 備援
     for(const mkProxy of CORS_PROXIES){
+      // 防呆：如果使用者忘記替換網址，跳過此 Proxy
+      if(mkProxy(yfUrl).includes('YOUR_WORKERS_URL')) continue;
+      
       const data = await safeFetch(mkProxy(yfUrl), 13000);
       if(!data) continue;
       const rows = parseYFResponse(data);
@@ -1036,7 +1042,7 @@ async function fetchOHLCV(ticker){
 }
 
 /* ═══════════════════════════════════════════════════════════
-   COMPOSITE ANALYSIS (包含基本面抓取)
+   COMPOSITE ANALYSIS (基本面抓取)
 ═══════════════════════════════════════════════════════════ */
 async function get_financials(ticker) {
   try {
@@ -1050,6 +1056,8 @@ async function get_financials(ticker) {
 
     if (!data) {
       for (const mkProxy of CORS_PROXIES) {
+        if(mkProxy(yfUrl).includes('YOUR_WORKERS_URL')) continue;
+
         const proxied = await safeFetch(mkProxy(yfUrl), 10000);
         let inner = proxied;
         if (inner && typeof inner.contents === 'string') {
@@ -1059,7 +1067,10 @@ async function get_financials(ticker) {
       }
     }
 
-    if (!data || !data.quoteSummary || !data.quoteSummary.result) return null;
+    if (!data || !data.quoteSummary || !data.quoteSummary.result) {
+      console.warn(`[${ticker}] 基本面資料無法抓取，已被 Proxy 或 Yahoo 阻擋。`);
+      return null;
+    }
 
     const res = data.quoteSummary.result[0];
     const fd = res.financialData || {};
@@ -1663,7 +1674,9 @@ async function runAnalysis(){
     });
     results.push(r); done++;
     renderTable(); updateStats();
-    await sleep(120);
+    
+    // ⚠️ 關鍵修正：將原本的 120ms 放慢至 1500ms (1.5秒)，避免觸發 Yahoo 的反爬蟲機制
+    await sleep(1500); 
   }
 
   document.getElementById('loading').classList.remove('show');
@@ -2188,10 +2201,12 @@ async function runProxyDiag(){
 
   const testTicker = 'AAPL';
   const testUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${testTicker}?interval=1d&range=5d`;
+  
+  // ⚠️ 關鍵修正：將您的專屬 Proxy 加入診斷顯示名稱中
   const proxyNames = [
-    'corsproxy.io', 'allorigins/raw', 'allorigins/get',
-    'thingproxy', 'codetabs', 'cors-anywhere'
+    'morepeng.ccwu.cc (專屬)', 'corsproxy.io', 'allorigins/raw'
   ];
+  
   const results = [];
 
   for(let i=0; i<CORS_PROXIES.length; i++){
@@ -2201,7 +2216,7 @@ async function runProxyDiag(){
     const data = await safeFetch(url, 10000);
     const ms   = Date.now() - t0;
     const ok   = data && parseYFResponse(data) !== null;
-    results.push({name: proxyNames[i], ok, ms});
+    results.push({name: proxyNames[i] || 'Unknown Proxy', ok, ms});
   }
 
   out.innerHTML = results.map(r=>
@@ -2218,16 +2233,13 @@ async function runProxyDiag(){
   if(working.length === 0){
     out.innerHTML += `<div style="color:var(--red);font-size:11px;margin-top:8px;width:100%">
       ⚠ 所有 proxy 均無法連線。建議：<br>
-      1. 切換到 WiFi 或 4G/5G<br>
-      2. 開啟 VPN 後重試<br>
-      3. 直接在電腦瀏覽器開啟（非手機）<br>
-      4. 使用 Python 版本（不需要 proxy）
+      1. 若剛執行完大量掃描，可能是短時間請求過多被 Yahoo 阻擋，請等待 5 到 10 分鐘後重試。<br>
+      2. 確認本機網路連線狀態。
     </div>`;
   } else {
     out.innerHTML += `<div style="color:var(--green);font-size:11px;margin-top:8px">
       ✅ ${working.length} 個 proxy 可用，可以重新執行分析
     </div>`;
-    // 把可用的 proxy 移到最前面
     const okIdx = results.findIndex(r=>r.ok);
     if(okIdx > 0){
       const best = CORS_PROXIES.splice(okIdx,1)[0];
@@ -2236,7 +2248,6 @@ async function runProxyDiag(){
     }
   }
 }
-
 /* ═══════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════ */
