@@ -952,10 +952,7 @@ function updateClock(){
 setInterval(updateClock, 1000); updateClock();
 
 /* ═══════════════════════════════════════════════════════════
-   DATA FETCHING  v2.2
-   ① file:// → 直接呼叫YF（有時可行）+ proxy備援
-   ② https:// (GitHub Pages) → 直接呼叫YF（不需proxy）
-   ③ 6個proxy依序嘗試作為最終備援
+   DATA FETCHING  v2.3 (專屬 Cloudflare Worker 版)
 ═══════════════════════════════════════════════════════════ */
 const IS_FILE_PROTO = location.protocol === 'file:';
 const IS_HTTPS      = location.protocol === 'https:';
@@ -967,19 +964,18 @@ const YF_ENDPOINTS = [
   'https://query1.finance.yahoo.com/v7/finance/chart/',
 ];
 
-// CORS Proxy 清單（依成功率排序）
+// 🟢 您的專屬 Cloudflare Worker Proxy 網址
+const MY_PRIVATE_PROXY = 'https://morepeng.ccwu.cc/?url=';
+
+// CORS Proxy 清單（優先使用個人專屬 Proxy，保留公共作為極限備援）
 const CORS_PROXIES = [
+  url => MY_PRIVATE_PROXY + encodeURIComponent(url),
   url => 'https://corsproxy.io/?' + encodeURIComponent(url),
-  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-  url => 'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
-  url => 'https://thingproxy.freeboard.io/fetch/' + url,
-  url => 'https://api.codetabs.com/v1/proxy?quest=' + url,
-  url => 'https://cors-anywhere.herokuapp.com/' + url,
+  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
 ];
 
 // 解析 YF chart 回應 → OHLCV rows
 function parseYFResponse(data){
-  // allorigins /get 會多一層 {contents: '...'}
   let inner = data;
   if(typeof data.contents === 'string'){
     try{ inner = JSON.parse(data.contents); }catch(e){ return null; }
@@ -1022,13 +1018,12 @@ async function fetchOHLCV(ticker){
     const yfUrl = base + ticker + '?interval=1d&range=1y&includeAdjustedClose=true';
 
     // 策略①: https:// 直接呼叫 (GitHub Pages / 電腦瀏覽器)
-    // Yahoo Finance 2024+ 已加入 Access-Control-Allow-Origin: *
     if(IS_HTTPS){
       const direct = await safeFetch(yfUrl, 8000);
       if(direct){ const rows=parseYFResponse(direct); if(rows&&rows.length>=30) return rows; }
     }
 
-    // 策略②: CORS Proxy 備援（file://環境 或 直連失敗時）
+    // 策略②: CORS Proxy 備援（使用專屬 Cloudflare Worker）
     for(const mkProxy of CORS_PROXIES){
       const data = await safeFetch(mkProxy(yfUrl), 13000);
       if(!data) continue;
@@ -1039,6 +1034,80 @@ async function fetchOHLCV(ticker){
   }
   return null;
 }
+
+/* ═══════════════════════════════════════════════════════════
+   COMPOSITE ANALYSIS (包含基本面抓取)
+═══════════════════════════════════════════════════════════ */
+async function get_financials(ticker) {
+  try {
+    const yfUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,cashflowStatementHistory`;
+    let data = null;
+
+    if (IS_HTTPS) {
+      const direct = await safeFetch(yfUrl, 8000);
+      if (direct && direct.quoteSummary) data = direct;
+    }
+
+    if (!data) {
+      for (const mkProxy of CORS_PROXIES) {
+        const proxied = await safeFetch(mkProxy(yfUrl), 10000);
+        let inner = proxied;
+        if (inner && typeof inner.contents === 'string') {
+          try { inner = JSON.parse(inner.contents); } catch (e) {}
+        }
+        if (inner && inner.quoteSummary) { data = inner; break; }
+      }
+    }
+
+    if (!data || !data.quoteSummary || !data.quoteSummary.result) return null;
+
+    const res = data.quoteSummary.result[0];
+    const fd = res.financialData || {};
+    const dks = res.defaultKeyStatistics || {};
+    const cfs = res.cashflowStatementHistory?.cashflowStatements || [];
+
+    let score = 0;
+    const details = {};
+
+    const pe = dks.trailingPE?.raw ?? null;
+    details.PE = pe;
+    if (pe !== null && pe > 0 && pe < 20) score += 20;
+
+    const roe = fd.returnOnEquity?.raw ?? null;
+    details.ROE = roe !== null ? roe * 100 : null;
+    if (roe !== null && roe > 0.15) score += 20;
+
+    let capexRatio = null;
+    let capexScore = 0;
+    
+    if (cfs.length > 0) {
+      const latestOcf = cfs[0].totalCashFromOperatingActivities?.raw;
+      const latestCapex = cfs[0].capitalExpenditures?.raw;
+      
+      if (latestOcf !== undefined && latestCapex !== undefined && latestOcf > 0) {
+        capexRatio = Math.abs(latestCapex) / latestOcf * 100;
+        details.CapEx_Ratio = capexRatio;
+
+        if (capexRatio < 25) capexScore = 10;
+        else if (capexRatio < 50) capexScore = 5;
+        else if (capexRatio > 100) capexScore = -10;
+      }
+    }
+    
+    details.CapEx_Ratio = capexRatio;
+    details.CapEx_Score = capexScore;
+    score += capexScore;
+    
+    details.Total_Score = score;
+    return details;
+
+  } catch (e) {
+    console.error(`Error fetching financials for ${ticker}:`, e);
+    return null;
+  }
+}
+
+
 
 /* ═══════════════════════════════════════════════════════════
    TA CALCULATIONS
