@@ -1251,113 +1251,78 @@ function preScreen(rows){
 ═══════════════════════════════════════════════════════════ */
 async function get_financials(ticker) {
   try {
-    const stock = yf.Ticker(ticker);
-    const info = stock.info || {};
-    const income = stock.financials || {};
-    const balance = stock.balance_sheet || {};
-    const cashflow = stock.cashflow || {};
+    const yfUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,cashflowStatementHistory`;
+    let data = null;
+
+    // 1. 直連測試 (支援 HTTPS 環境如 GitHub Pages)
+    if (IS_HTTPS) {
+      const direct = await safeFetch(yfUrl, 8000);
+      if (direct && direct.quoteSummary) data = direct;
+    }
+
+    // 2. CORS Proxy 備援
+    if (!data) {
+      for (const mkProxy of CORS_PROXIES) {
+        const proxied = await safeFetch(mkProxy(yfUrl), 10000);
+        let inner = proxied;
+        if (inner && typeof inner.contents === 'string') {
+          try { inner = JSON.parse(inner.contents); } catch (e) {}
+        }
+        if (inner && inner.quoteSummary) { data = inner; break; }
+      }
+    }
+
+    if (!data || !data.quoteSummary || !data.quoteSummary.result) return null;
+
+    const res = data.quoteSummary.result[0];
+    const fd = res.financialData || {};
+    const dks = res.defaultKeyStatistics || {};
+    const cfs = res.cashflowStatementHistory?.cashflowStatements || [];
 
     let score = 0;
     const details = {};
 
-    const pe = info.trailingPE ?? null;
+    // 計算 PE (本益比)
+    const pe = dks.trailingPE?.raw ?? null;
     details.PE = pe;
     if (pe !== null && pe > 0 && pe < 20) score += 20;
 
-    const roe = info.returnOnEquity ?? null;
+    // 計算 ROE
+    const roe = fd.returnOnEquity?.raw ?? null;
     details.ROE = roe !== null ? roe * 100 : null;
     if (roe !== null && roe > 0.15) score += 20;
 
-    const totalDebt = info.totalDebt ?? 0;
-    const totalAssets = info.totalAssets ?? 0;
-    const debtRatio = totalAssets > 0 ? (totalDebt / totalAssets) * 100 : null;
-    details.Debt_Ratio = debtRatio;
-    if (debtRatio !== null && debtRatio < 50) score += 15;
-
-    const ocfRow = cashflow["Operating Cash Flow"] ?? cashflow["Total Cash From Operating Activities"] ?? null;
-    const capexRow = cashflow["Capital Expenditure"] ?? cashflow["Capital Expenditures"] ?? null;
-
-    if (ocfRow && capexRow) {
-      const ocfArr = Array.isArray(ocfRow) ? ocfRow : Object.values(ocfRow);
-      const capexArr = Array.isArray(capexRow) ? capexRow : Object.values(capexRow);
-
-      const fcfArr = [];
-      const n = Math.min(ocfArr.length, capexArr.length, 5);
-      for (let i = 0; i < n; i++) {
-        const ocf = ocfArr[i];
-        const capex = capexArr[i];
-        if (ocf !== null && capex !== null && ocf !== undefined && capex !== undefined) {
-          fcfArr.push(ocf - capex);
-        }
-      }
-
-      details.FCF_Years_Positive = fcfArr.filter(v => v > 0).length;
-      if (fcfArr.length >= 5 && fcfArr.every(v => v > 0)) {
-        score += 20;
-      }
-    } else {
-      details.FCF_Years_Positive = null;
-    }
-
-    const revenueRow = income["Total Revenue"] ?? income["TotalRevenue"] ?? null;
-    if (revenueRow) {
-      const revenueArr = Array.isArray(revenueRow) ? revenueRow : Object.values(revenueRow);
-      if (revenueArr.length >= 5) {
-        const revStart = revenueArr[4];
-        const revEnd = revenueArr[0];
-        if (revStart && revEnd && revStart > 0) {
-          const revCagr = Math.pow(revEnd / revStart, 1 / 4) - 1;
-          details.Revenue_CAGR = revCagr * 100;
-          if (revCagr > 0.10) score += 10;
-        }
-      }
-    }
-
-    const epsGrowth = info.earningsGrowth ?? null;
-    details.EPS_Growth = epsGrowth !== null ? epsGrowth * 100 : null;
-    if (epsGrowth !== null && epsGrowth > 0.10) score += 10;
-
-    const dividendYears = info.dividendYears ?? 0;
-    details.Dividend_Years = dividendYears;
-    if (dividendYears >= 5) score += 5;
-
+    // 取得現金流並計算 CapEx Ratio
     let capexRatio = null;
     let capexScore = 0;
-
-    if (ocfRow && capexRow) {
-      const ocfArr = Array.isArray(ocfRow) ? ocfRow : Object.values(ocfRow);
-      const capexArr = Array.isArray(capexRow) ? capexRow : Object.values(capexRow);
-
-      const latestOcf = ocfArr.find(v => v !== null && v !== undefined);
-      const latestCapex = capexArr.find(v => v !== null && v !== undefined);
-
-      if (latestOcf !== null && latestOcf !== undefined && latestOcf > 0 &&
-          latestCapex !== null && latestCapex !== undefined) {
+    
+    if (cfs.length > 0) {
+      const latestOcf = cfs[0].totalCashFromOperatingActivities?.raw;
+      const latestCapex = cfs[0].capitalExpenditures?.raw;
+      
+      // 注意：Yahoo Finance 的 CapEx 通常呈現為負數，使用絕對值計算比例
+      if (latestOcf !== undefined && latestCapex !== undefined && latestOcf > 0) {
         capexRatio = Math.abs(latestCapex) / latestOcf * 100;
         details.CapEx_Ratio = capexRatio;
 
-        if (capexRatio < 25) {
-          capexScore = 10;
-        } else if (capexRatio < 50) {
-          capexScore = 5;
-        } else if (capexRatio > 100) {
-          capexScore = -10;
-        }
-      } else {
-        details.CapEx_Ratio = null;
+        if (capexRatio < 25) capexScore = 10;
+        else if (capexRatio < 50) capexScore = 5;
+        else if (capexRatio > 100) capexScore = -10;
       }
     }
-
+    
+    details.CapEx_Ratio = capexRatio;
     details.CapEx_Score = capexScore;
     score += capexScore;
+    
     details.Total_Score = score;
     return details;
+
   } catch (e) {
-    console.error(`Error fetching ${ticker}:`, e);
+    console.error(`Error fetching financials for ${ticker}:`, e);
     return null;
   }
-}
-      
+}   
       
       
       
@@ -1731,11 +1696,11 @@ function renderTable(){
       <td style="${pctColor(r.chg1d)};font-size:11px">${r.chg1d>0?'+':''}${r.chg1d}%</td>
       <td style="${pctColor(r.chg1m)};font-size:11px">${r.chg1m>0?'+':''}${r.chg1m}%</td>
       <td style="font-size:11px;color:${zoneColor(r.pd?.zone)}">${r.pd?.zone||'─'}</td>
+      <td style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">$${r.stop_loss||'─'}</td>
       <td style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">${r.fund_score ?? 0}</td>
       <td style="font-size:11px;color:${r.capex_ratio !== null && r.capex_ratio !== undefined ? (r.capex_ratio < 25 ? 'var(--green)' : r.capex_ratio < 50 ? 'var(--yellow)' : 'var(--red)') : 'var(--muted)'};font-family:var(--font-mono)">
         ${r.capex_ratio !== null && r.capex_ratio !== undefined ? r.capex_ratio.toFixed(1) + '%' : '─'}
       </td>
-      <td style="font-size:11px;color:var(--muted);font-family:var(--font-mono)">$${r.stop_loss||'─'}</td>
     </tr>`; 
   }).join('');
 }
