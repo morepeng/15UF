@@ -1053,8 +1053,25 @@ function raceSources(yfUrl, validate, ms){
   });
 }
 
+// ── 靜態價格檔（由 GitHub Actions 每天產生）──────────────
+let _pricesP = null;
+function loadPrices(){
+  if(!_pricesP){
+    _pricesP = fetch('./prices.json', {cache:'no-cache'})
+      .then(r=>r.ok ? r.json() : null).catch(()=>null)
+      .then(j=>{
+        if(j && j.generated) toast('📦 價格資料: '+j.generated.slice(0,16).replace('T',' ')+' UTC', 3500);
+        return j;
+      });
+  }
+  return _pricesP;
+}
+
 // 主要行情抓取
 async function fetchOHLCV(ticker){
+  const pj = await loadPrices();
+  const st = pj && pj.tickers && pj.tickers[ticker];
+  if(st && st.rows && st.rows.length>=30) return st.rows;
   const ck = 'ohlc_'+ticker;
   const hit = cacheGet(ck);
   if(hit) return hit;
@@ -1278,6 +1295,9 @@ function preScreen(rows){
 async function get_financials(ticker) {
   try {
     const yfUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,cashflowStatementHistory`;
+    const pj = await loadPrices();
+    const st = pj && pj.tickers && pj.tickers[ticker];
+    if(st && st.fin) return st.fin;
     const ck = 'fin_'+ticker;
     let data = cacheGet(ck);
     // quoteSummary 需要 Yahoo crumb，瀏覽器端通常拿不到：失敗3次後整體跳過
