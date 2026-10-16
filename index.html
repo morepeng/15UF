@@ -28,15 +28,11 @@ body{
   min-height:100vh;overflow-x:hidden;
 }
 /* Scanline effect */
-body::before{
-  content:'';position:fixed;inset:0;pointer-events:none;z-index:9999;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.04) 2px,rgba(0,0,0,.04) 4px);
-}
+/* scanline 全螢幕疊層已移除（手機會明顯拖慢捲動） */
 /* ── HEADER ── */
 header{
   position:sticky;top:0;z-index:100;
-  background:rgba(5,10,15,.92);
-  backdrop-filter:blur(12px);
+  background:rgba(5,10,15,.97);
   border-bottom:1px solid var(--border);
   padding:12px 24px;
   display:flex;align-items:center;gap:16px;flex-wrap:wrap;
@@ -258,7 +254,7 @@ tr:last-child td{border-bottom:none}
 /* ── LOADING ── */
 #loading{
   display:none;position:fixed;inset:0;z-index:300;
-  background:rgba(5,10,15,.92);backdrop-filter:blur(8px);
+  background:rgba(5,10,15,.96);
   flex-direction:column;align-items:center;justify-content:center;gap:20px;
 }
 #loading.show{display:flex}
@@ -781,7 +777,7 @@ function resolveTicker(companyName){
 async function loadHoldingsJSON(){
   try{
     // 同源讀取 holdings.json（與 index.html 同資料夾，無CORS問題）
-    const res = await fetch('./holdings.json?t='+Date.now());
+    const res = await fetch('./holdings.json');
     if(!res.ok) throw new Error('HTTP '+res.status);
     const data = await res.json();
     return data;
@@ -952,7 +948,10 @@ function updateClock(){
 setInterval(updateClock, 1000); updateClock();
 
 /* ═══════════════════════════════════════════════════════════
-   DATA FETCHING  v2.4 (強化版 Proxy 與除錯)
+   DATA FETCHING  v2.2
+   ① file:// → 直接呼叫YF（有時可行）+ proxy備援
+   ② https:// (GitHub Pages) → 直接呼叫YF（不需proxy）
+   ③ 6個proxy依序嘗試作為最終備援
 ═══════════════════════════════════════════════════════════ */
 const IS_FILE_PROTO = location.protocol === 'file:';
 const IS_HTTPS      = location.protocol === 'https:';
@@ -964,21 +963,19 @@ const YF_ENDPOINTS = [
   'https://query1.finance.yahoo.com/v7/finance/chart/',
 ];
 
-// ⚠️ 關鍵修正：請將下面這行換成您真正的 workers.dev 網址！
-// 例如： 'https://mj-proxy.peter.workers.dev/?url='
-// 🟢 直接使用 Cloudflare 原生的 Pages 網域，避開自訂 DNS 路由問題
-const MY_PRIVATE_PROXY = 'https://morepeng.pages.dev/?url=';
-
-// CORS Proxy 清單（加入極強的 codetabs 作為第一備援）
+// CORS Proxy 清單（依成功率排序）
 const CORS_PROXIES = [
-  url => MY_PRIVATE_PROXY + encodeURIComponent(url),
-  url => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   url => 'https://corsproxy.io/?' + encodeURIComponent(url),
-  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url)
+  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+  url => 'https://api.allorigins.win/get?url=' + encodeURIComponent(url),
+  url => 'https://thingproxy.freeboard.io/fetch/' + url,
+  url => 'https://api.codetabs.com/v1/proxy?quest=' + url,
+  url => 'https://cors-anywhere.herokuapp.com/' + url,
 ];
 
 // 解析 YF chart 回應 → OHLCV rows
 function parseYFResponse(data){
+  // allorigins /get 會多一層 {contents: '...'}
   let inner = data;
   if(typeof data.contents === 'string'){
     try{ inner = JSON.parse(data.contents); }catch(e){ return null; }
@@ -1002,123 +999,72 @@ function parseYFResponse(data){
   return rows.length >= 30 ? rows.slice(-300) : null;
 }
 
-// 帶超時的 fetch 工具
-async function safeFetch(url, ms=12000){
+// ── 快取 (sessionStorage, 30分鐘) ─────────────────────────
+const CACHE_TTL = 30*60*1000;
+function cacheGet(k){
+  try{
+    const o = JSON.parse(sessionStorage.getItem('mj_'+k)||'null');
+    if(o && Date.now()-o.t < CACHE_TTL) return o.d;
+  }catch(e){}
+  return null;
+}
+function cacheSet(k,d){
+  try{ sessionStorage.setItem('mj_'+k, JSON.stringify({t:Date.now(),d})); }catch(e){}
+}
+
+// ── 帶超時的 fetch（失敗回 null，不拋錯）────────────────────
+async function safeFetch(url, ms=6000){
   const ctrl = new AbortController();
   const timer = setTimeout(()=>ctrl.abort(), ms);
   try{
-    const r = await fetch(url, {signal: ctrl.signal,
-      headers: {'Accept': 'application/json'}});
+    const r = await fetch(url, {signal: ctrl.signal});
     clearTimeout(timer);
     if(!r.ok) return null;
     return await r.json();
   }catch(e){ clearTimeout(timer); return null; }
 }
 
-// 主要行情抓取（全鏈路備援）
+// ── 斷路器：某來源連續失敗就暫時跳過，不再每支股票重試 ───────
+const BREAKER = {};   // name -> {fail:int, until:ms}
+function breakerOpen(name){ const b=BREAKER[name]; return b && b.until>Date.now(); }
+function breakerRecord(name, ok){
+  const b = BREAKER[name] || (BREAKER[name]={fail:0,until:0});
+  if(ok){ b.fail=0; return; }
+  if(++b.fail>=3) b.until = Date.now()+5*60*1000;   // 連錯3次 → 停用5分鐘
+}
+
+// ── 同時競速：所有可用來源一起打，誰先回有效資料就用誰 ────────
+function raceSources(yfUrl, validate, ms){
+  const sources = [];
+  if(IS_HTTPS) sources.push({name:'direct', url:yfUrl});
+  CORS_PROXIES.slice(0,4).forEach((mk,i)=>sources.push({name:'proxy'+i, url:mk(yfUrl)}));
+  const live = sources.filter(s=>!breakerOpen(s.name));
+  if(!live.length) return Promise.resolve(null);
+  return new Promise(resolve=>{
+    let pending = live.length, done=false;
+    live.forEach(async s=>{
+      const data = await safeFetch(s.url, ms);
+      let good = null;
+      if(data){ try{ good = validate(data); }catch(e){} }
+      breakerRecord(s.name, !!good);
+      if(good && !done){ done=true; resolve(good); }
+      if(--pending===0 && !done) resolve(null);
+    });
+  });
+}
+
+// 主要行情抓取
 async function fetchOHLCV(ticker){
-  for(const base of YF_ENDPOINTS){
-    const yfUrl = base + ticker + '?interval=1d&range=1y&includeAdjustedClose=true';
-
-    // 策略①: https:// 直接呼叫 (GitHub Pages / 電腦瀏覽器)
-    if(IS_HTTPS){
-      const direct = await safeFetch(yfUrl, 8000);
-      if(direct){ const rows=parseYFResponse(direct); if(rows&&rows.length>=30) return rows; }
-    }
-
-    // 策略②: CORS Proxy 備援
-    for(const mkProxy of CORS_PROXIES){
-      // 防呆：如果使用者忘記替換網址，跳過此 Proxy
-      if(mkProxy(yfUrl).includes('YOUR_WORKERS_URL')) continue;
-      
-      const data = await safeFetch(mkProxy(yfUrl), 13000);
-      if(!data) continue;
-      const rows = parseYFResponse(data);
-      if(rows && rows.length >= 30) return rows;
-    }
-    await sleep(200);
+  const ck = 'ohlc_'+ticker;
+  const hit = cacheGet(ck);
+  if(hit) return hit;
+  for(const base of YF_ENDPOINTS.slice(0,2)){
+    const yfUrl = base + ticker + '?interval=1d&range=1y';
+    const rows = await raceSources(yfUrl, parseYFResponse, 7000);
+    if(rows){ cacheSet(ck, rows); return rows; }
   }
   return null;
 }
-
-/* ═══════════════════════════════════════════════════════════
-   COMPOSITE ANALYSIS (基本面抓取)
-═══════════════════════════════════════════════════════════ */
-async function get_financials(ticker) {
-  try {
-    const yfUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,cashflowStatementHistory`;
-    let data = null;
-
-    if (IS_HTTPS) {
-      const direct = await safeFetch(yfUrl, 8000);
-      if (direct && direct.quoteSummary) data = direct;
-    }
-
-    if (!data) {
-      for (const mkProxy of CORS_PROXIES) {
-        if(mkProxy(yfUrl).includes('YOUR_WORKERS_URL')) continue;
-
-        const proxied = await safeFetch(mkProxy(yfUrl), 10000);
-        let inner = proxied;
-        if (inner && typeof inner.contents === 'string') {
-          try { inner = JSON.parse(inner.contents); } catch (e) {}
-        }
-        if (inner && inner.quoteSummary) { data = inner; break; }
-      }
-    }
-
-    if (!data || !data.quoteSummary || !data.quoteSummary.result) {
-      console.warn(`[${ticker}] 基本面資料無法抓取，已被 Proxy 或 Yahoo 阻擋。`);
-      return null;
-    }
-
-    const res = data.quoteSummary.result[0];
-    const fd = res.financialData || {};
-    const dks = res.defaultKeyStatistics || {};
-    const cfs = res.cashflowStatementHistory?.cashflowStatements || [];
-
-    let score = 0;
-    const details = {};
-
-    const pe = dks.trailingPE?.raw ?? null;
-    details.PE = pe;
-    if (pe !== null && pe > 0 && pe < 20) score += 20;
-
-    const roe = fd.returnOnEquity?.raw ?? null;
-    details.ROE = roe !== null ? roe * 100 : null;
-    if (roe !== null && roe > 0.15) score += 20;
-
-    let capexRatio = null;
-    let capexScore = 0;
-    
-    if (cfs.length > 0) {
-      const latestOcf = cfs[0].totalCashFromOperatingActivities?.raw;
-      const latestCapex = cfs[0].capitalExpenditures?.raw;
-      
-      if (latestOcf !== undefined && latestCapex !== undefined && latestOcf > 0) {
-        capexRatio = Math.abs(latestCapex) / latestOcf * 100;
-        details.CapEx_Ratio = capexRatio;
-
-        if (capexRatio < 25) capexScore = 10;
-        else if (capexRatio < 50) capexScore = 5;
-        else if (capexRatio > 100) capexScore = -10;
-      }
-    }
-    
-    details.CapEx_Ratio = capexRatio;
-    details.CapEx_Score = capexScore;
-    score += capexScore;
-    
-    details.Total_Score = score;
-    return details;
-
-  } catch (e) {
-    console.error(`Error fetching financials for ${ticker}:`, e);
-    return null;
-  }
-}
-
-
 
 /* ═══════════════════════════════════════════════════════════
    TA CALCULATIONS
@@ -1332,24 +1278,17 @@ function preScreen(rows){
 async function get_financials(ticker) {
   try {
     const yfUrl = `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${ticker}?modules=financialData,defaultKeyStatistics,cashflowStatementHistory`;
-    let data = null;
-
-    // 1. 直連測試 (支援 HTTPS 環境如 GitHub Pages)
-    if (IS_HTTPS) {
-      const direct = await safeFetch(yfUrl, 8000);
-      if (direct && direct.quoteSummary) data = direct;
-    }
-
-    // 2. CORS Proxy 備援
-    if (!data) {
-      for (const mkProxy of CORS_PROXIES) {
-        const proxied = await safeFetch(mkProxy(yfUrl), 10000);
-        let inner = proxied;
-        if (inner && typeof inner.contents === 'string') {
-          try { inner = JSON.parse(inner.contents); } catch (e) {}
-        }
-        if (inner && inner.quoteSummary) { data = inner; break; }
-      }
+    const ck = 'fin_'+ticker;
+    let data = cacheGet(ck);
+    // quoteSummary 需要 Yahoo crumb，瀏覽器端通常拿不到：失敗3次後整體跳過
+    if(!data && !breakerOpen('financials')){
+      data = await raceSources(yfUrl, d=>{
+        let inner = d;
+        if(typeof d.contents==='string'){ try{ inner=JSON.parse(d.contents);}catch(e){return null;} }
+        return (inner && inner.quoteSummary && inner.quoteSummary.result) ? inner : null;
+      }, 6000);
+      breakerRecord('financials', !!data);
+      if(data) cacheSet(ck, data);
     }
 
     if (!data || !data.quoteSummary || !data.quoteSummary.result) return null;
@@ -1659,25 +1598,42 @@ async function runAnalysis(){
   document.getElementById('loading-msg').textContent='📈 STEP 2–5: TA + ICT/SMC 分析...';
   let done=0;
 
-  for(const h of holdingsList){
-    document.getElementById('loading-msg').textContent=
-      `📈 ${h.ticker}  ${h.company||''}`;
-    document.getElementById('progress-text').textContent=
-      `${done+1} / ${holdingsList.length}`;
+  // 去重（例如 GOOGL 有兩個 CUSIP）
+  const seen = new Set();
+  const uniq = holdingsList.filter(h=>{ if(seen.has(h.ticker)) return false; seen.add(h.ticker); return true; });
 
-    const r=await analyzeStock({
-      ticker      : h.ticker,
-      company     : h.company||h.company_name||h.ticker,
-      rank        : h.rank||done+1,
-      holding_pct : +(h.holding_pct)||0,
-      inst_count  : +(h.inst_count)||0,
-    });
-    results.push(r); done++;
-    renderTable(); updateStats();
-    
-    // ⚠️ 關鍵修正：將原本的 120ms 放慢至 1500ms (1.5秒)，避免觸發 Yahoo 的反爬蟲機制
-    await sleep(1500); 
+  // 節流渲染：最多每 250ms 重畫一次表格
+  let renderTimer=null;
+  const scheduleRender = ()=>{
+    if(renderTimer) return;
+    renderTimer = setTimeout(()=>{ renderTimer=null; renderTable(); updateStats(); }, 250);
+  };
+
+  // 並行池：同時 5 支
+  const CONCURRENCY = 5;
+  let next = 0;
+  async function worker(){
+    while(next < uniq.length){
+      const h = uniq[next++];
+      let r;
+      try{
+        r = await analyzeStock({
+          ticker      : h.ticker,
+          company     : h.company||h.company_name||h.ticker,
+          rank        : h.rank||next,
+          holding_pct : +(h.holding_pct)||0,
+          inst_count  : +(h.inst_count)||0,
+        });
+      }catch(e){ console.warn(h.ticker, e); continue; }
+      results.push(r); done++;
+      document.getElementById('progress-text').textContent = `${done} / ${uniq.length}`;
+      document.getElementById('loading-msg').textContent = `📈 已完成 ${h.ticker}`;
+      scheduleRender();
+    }
   }
+  await Promise.all(Array.from({length:Math.min(CONCURRENCY,uniq.length)}, worker));
+  if(renderTimer){ clearTimeout(renderTimer); renderTimer=null; }
+  renderTable(); updateStats();
 
   document.getElementById('loading').classList.remove('show');
   btn.disabled=false; btn.textContent='⚡ 重新分析';
@@ -2201,12 +2157,10 @@ async function runProxyDiag(){
 
   const testTicker = 'AAPL';
   const testUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${testTicker}?interval=1d&range=5d`;
-  
-  // ⚠️ 關鍵修正：將您的專屬 Proxy 加入診斷顯示名稱中
   const proxyNames = [
-    'morepeng.ccwu.cc (專屬)', 'corsproxy.io', 'allorigins/raw'
+    'corsproxy.io', 'allorigins/raw', 'allorigins/get',
+    'thingproxy', 'codetabs', 'cors-anywhere'
   ];
-  
   const results = [];
 
   for(let i=0; i<CORS_PROXIES.length; i++){
@@ -2216,7 +2170,7 @@ async function runProxyDiag(){
     const data = await safeFetch(url, 10000);
     const ms   = Date.now() - t0;
     const ok   = data && parseYFResponse(data) !== null;
-    results.push({name: proxyNames[i] || 'Unknown Proxy', ok, ms});
+    results.push({name: proxyNames[i], ok, ms});
   }
 
   out.innerHTML = results.map(r=>
@@ -2233,13 +2187,16 @@ async function runProxyDiag(){
   if(working.length === 0){
     out.innerHTML += `<div style="color:var(--red);font-size:11px;margin-top:8px;width:100%">
       ⚠ 所有 proxy 均無法連線。建議：<br>
-      1. 若剛執行完大量掃描，可能是短時間請求過多被 Yahoo 阻擋，請等待 5 到 10 分鐘後重試。<br>
-      2. 確認本機網路連線狀態。
+      1. 切換到 WiFi 或 4G/5G<br>
+      2. 開啟 VPN 後重試<br>
+      3. 直接在電腦瀏覽器開啟（非手機）<br>
+      4. 使用 Python 版本（不需要 proxy）
     </div>`;
   } else {
     out.innerHTML += `<div style="color:var(--green);font-size:11px;margin-top:8px">
       ✅ ${working.length} 個 proxy 可用，可以重新執行分析
     </div>`;
+    // 把可用的 proxy 移到最前面
     const okIdx = results.findIndex(r=>r.ok);
     if(okIdx > 0){
       const best = CORS_PROXIES.splice(okIdx,1)[0];
@@ -2248,6 +2205,7 @@ async function runProxyDiag(){
     }
   }
 }
+
 /* ═══════════════════════════════════════════════════════════
    INIT
 ═══════════════════════════════════════════════════════════ */
