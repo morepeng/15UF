@@ -1,0 +1,290 @@
+{
+  "generated_at": "2026-10-27T08:53:24Z",
+  "source": "13F",
+  "13f_latest_filing_date": "2026-09-22",
+  "filings": [
+    {
+      "institution": "BlackRock",
+      "filing_date": "2024-08-13",
+      "holdings_cnt": 48161
+    },
+    {
+      "institution": "Berkshire Hathaway",
+      "filing_date": "2026-08-14",
+      "holdings_cnt": 89
+    },
+    {
+      "institution": "Vanguard Group",
+      "filing_date": "2026-01-29",
+      "holdings_cnt": 2146
+    },
+    {
+      "institution": "State Street",
+      "filing_date": "2026-09-22",
+      "holdings_cnt": 4261
+    },
+    {
+      "institution": "Goldman Sachs",
+      "filing_date": "2026-08-14",
+      "holdings_cnt": 3155
+    },
+    {
+      "institution": "Morgan Stanley",
+      "filing_date": "2026-08-13",
+      "holdings_cnt": 4486
+    },
+    {
+      "institution": "Northern Trust",
+      "filing_date": "2026-08-13",
+      "holdings_cnt": 1844
+    },
+    {
+      "institution": "Fidelity / FMR",
+      "filing_date": "2026-08-13",
+      "holdings_cnt": 2683
+    }
+  ],
+  "count": 30,
+  "tickers": [
+    {
+      "ticker": "NVDA",
+      "company": "NVIDIA CORPORATION",
+      "rank": 1,
+      "holding_pct": 8.3413,
+      "inst_count": 42,
+      "total_value": 833600209970000
+    },
+    {
+      "ticker": "AAPL",
+      "company": "APPLE INC",
+      "rank": 2,
+      "holding_pct": 4.6674,
+      "inst_count": 48,
+      "total_value": 466440972519000
+    },
+    {
+      "ticker": "MSFT",
+      "company": "MICROSOFT CORP",
+      "rank": 3,
+      "holding_pct": 3.7463,
+      "inst_count": 42,
+      "total_value": 374388127653000
+    },
+    {
+      "ticker": "GOOGL",
+      "company": "ALPHABET INC",
+      "rank": 4,
+      "holding_pct": 3.6346,
+      "inst_count": 68,
+      "total_value": 363224710576000
+    },
+    {
+      "ticker": "AMZN",
+      "company": "AMAZON COM INC",
+      "rank": 5,
+      "holding_pct": 2.4526,
+      "inst_count": 36,
+      "total_value": 245101363203000
+    },
+    {
+      "ticker": "LLY",
+      "company": "ELI LILLY &AMP; CO",
+      "rank": 6,
+      "holding_pct": 1.9695,
+      "inst_count": 51,
+      "total_value": 196821018293000
+    },
+    {
+      "ticker": "META",
+      "company": "META PLATFORMS INC",
+      "rank": 7,
+      "holding_pct": 1.4479,
+      "inst_count": 42,
+      "total_value": 144694629942000
+    },
+    {
+      "ticker": "GARP",
+      "company": "ISHARES TR",
+      "rank": 8,
+      "holding_pct": 1.3894,
+      "inst_count": 803,
+      "total_value": 138852136060000
+    },
+    {
+      "ticker": "AVGO",
+      "company": "BROADCOM INC",
+      "rank": 9,
+      "holding_pct": 1.3373,
+      "inst_count": 26,
+      "total_value": 133647780363000
+    },
+    {
+      "ticker": "TSLA",
+      "company": "TESLA INC",
+      "rank": 10,
+      "holding_pct": 1.1978,
+      "inst_count": 48,
+      "total_value": 119706277844000
+    },
+    {
+      "ticker": "V",
+      "company": "VISA INC",
+      "rank": 11,
+      "holding_pct": 0.8281,
+      "inst_count": 48,
+      "total_value": 82758758260000
+    },
+    {
+      "ticker": "BRK-B",
+      "company": "BERKSHIRE HATHAWAY INC DEL",
+      "rank": 12,
+      "holding_pct": 0.8232,
+      "inst_count": 32,
+      "total_value": 82265412267000
+    },
+    {
+      "ticker": "UNH",
+      "company": "UNITEDHEALTH GROUP INC",
+      "rank": 13,
+      "holding_pct": 0.7438,
+      "inst_count": 52,
+      "total_value": 74331167040000
+    },
+    {
+      "ticker": "AXP",
+      "company": "AMERICAN EXPRESS CO",
+      "rank": 14,
+      "holding_pct": 0.7088,
+      "inst_count": 28,
+      "total_value": 70831941462000
+    },
+    {
+      "ticker": "JNJ",
+      "company": "JOHNSON &AMP; JOHNSON",
+      "rank": 15,
+      "holding_pct": 0.7079,
+      "inst_count": 38,
+      "total_value": 70745988304000
+    },
+    {
+      "ticker": "MU",
+      "company": "MICRON TECHNOLOGY INC",
+      "rank": 16,
+      "holding_pct": 0.7072,
+      "inst_count": 35,
+      "total_value": 70678562536000
+    },
+    {
+      "ticker": "KO",
+      "company": "COCA COLA CO",
+      "rank": 17,
+      "holding_pct": 0.6601,
+      "inst_count": 34,
+      "total_value": 65966806773000
+    },
+    {
+      "ticker": "XOM",
+      "company": "EXXON MOBIL CORP",
+      "rank": 18,
+      "holding_pct": 0.6461,
+      "inst_count": 27,
+      "total_value": 64565042771000
+    },
+    {
+      "ticker": "AMD",
+      "company": "ADVANCED MICRO DEVICES INC",
+      "rank": 19,
+      "holding_pct": 0.6452,
+      "inst_count": 42,
+      "total_value": 64474642077000
+    },
+    {
+      "ticker": "GE",
+      "company": "GE AEROSPACE",
+      "rank": 20,
+      "holding_pct": 0.5908,
+      "inst_count": 30,
+      "total_value": 59043903765000
+    },
+    {
+      "ticker": "TSM",
+      "company": "TAIWAN SEMICONDUCTOR MANUFAC",
+      "rank": 21,
+      "holding_pct": 0.5581,
+      "inst_count": 21,
+      "total_value": 55772483849000
+    },
+    {
+      "ticker": "SPCX",
+      "company": "SPACE EXPLORATION TECHN CORP",
+      "rank": 22,
+      "holding_pct": 0.5532,
+      "inst_count": 24,
+      "total_value": 55283788535000
+    },
+    {
+      "ticker": "AMAT",
+      "company": "APPLIED MATLS INC",
+      "rank": 23,
+      "holding_pct": 0.5395,
+      "inst_count": 45,
+      "total_value": 53918280992000
+    },
+    {
+      "ticker": "WMT",
+      "company": "WALMART INC",
+      "rank": 24,
+      "holding_pct": 0.5119,
+      "inst_count": 50,
+      "total_value": 51154329754000
+    },
+    {
+      "ticker": "MA",
+      "company": "MASTERCARD INCORPORATED",
+      "rank": 25,
+      "holding_pct": 0.5111,
+      "inst_count": 36,
+      "total_value": 51077953549000
+    },
+    {
+      "ticker": "CAT",
+      "company": "CATERPILLAR INC",
+      "rank": 26,
+      "holding_pct": 0.4875,
+      "inst_count": 25,
+      "total_value": 48719343347000
+    },
+    {
+      "ticker": "HD",
+      "company": "HOME DEPOT INC",
+      "rank": 27,
+      "holding_pct": 0.4817,
+      "inst_count": 35,
+      "total_value": 48143028057000
+    },
+    {
+      "ticker": "CSCO",
+      "company": "CISCO SYS INC",
+      "rank": 28,
+      "holding_pct": 0.4573,
+      "inst_count": 36,
+      "total_value": 45705878893000
+    },
+    {
+      "ticker": "INTC",
+      "company": "INTEL CORP",
+      "rank": 29,
+      "holding_pct": 0.4526,
+      "inst_count": 34,
+      "total_value": 45235401282000
+    },
+    {
+      "ticker": "BAC",
+      "company": "BANK OF AMER CORP",
+      "rank": 30,
+      "holding_pct": 0.4473,
+      "inst_count": 11,
+      "total_value": 44697619199000
+    }
+  ]
+}
